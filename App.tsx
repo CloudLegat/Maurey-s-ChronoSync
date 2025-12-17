@@ -62,17 +62,17 @@ function App() {
       <footer className="flex-shrink-0 h-12 bg-gray-100 border-t-2 border-black flex items-center px-6 text-xs font-mono text-gray-500 justify-between">
         <div className="flex gap-4">
           <span className="flex items-center gap-2">
-            <span className="w-3 h-3 bg-white border border-gray-400 block"></span> Day
+            <span className="w-3 h-3 bg-white border border-gray-400 block"></span> Same Day
           </span>
           <span className="flex items-center gap-2">
-            <span className="w-3 h-3 bg-slate-50 border border-gray-200 block"></span> Night
+            <span className="w-3 h-3 bg-slate-100 border border-gray-200 block"></span> Different Day
           </span>
           <span className="flex items-center gap-2">
-            <span className="w-1 h-4 bg-red-600 block"></span> Selected
+            <span className="w-1 h-4 bg-red-600 block"></span> Cursor
           </span>
         </div>
         <div className="hidden md:block">
-           DRAG TO SCROLL TIME
+           DRAG CURSOR TO COMPARE TIME
         </div>
       </footer>
 

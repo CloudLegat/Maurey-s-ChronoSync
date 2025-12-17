@@ -7,95 +7,93 @@ interface TimelineProps {
   onRemoveCity: (id: string) => void;
 }
 
-const CELL_WIDTH = 100; // Width of each hour cell in pixels
-
 export const Timeline: React.FC<TimelineProps> = ({ cities, onRemoveCity }) => {
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(new Date());
   
-  // Drag state
-  const [isDragging, setIsDragging] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [scrollLeftState, setScrollLeftState] = useState(0);
+  // Cursor position as a percentage (0 to 1)
+  const [cursorPosition, setCursorPosition] = useState(() => {
+    const d = new Date();
+    return (d.getHours() + d.getMinutes() / 60) / 24;
+  });
 
-  // Update time every second
+  const [isDragging, setIsDragging] = useState(false);
+  const gridAreaRef = useRef<HTMLDivElement>(null);
+
+  // Update live time every second
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Generate a fixed grid of hours anchored to the current hour at mount time.
-  const { hours } = useMemo(() => {
-      const nowTs = Date.now();
-      // Round down to the start of the current hour (e.g., 12:45 -> 12:00)
-      const startOfCurrentHourTs = Math.floor(nowTs / (1000 * 60 * 60)) * (1000 * 60 * 60);
-      
-      // Generate 48 hours centered (24 hours before, 23 hours after)
-      const h = Array.from({ length: 48 }, (_, i) => {
-        return new Date(startOfCurrentHourTs + (i - 24) * (1000 * 60 * 60));
-      });
-      return { hours: h };
-  }, []); 
-
-  // Center the scroll view on mount
-  useEffect(() => {
-    if (scrollContainerRef.current) {
-      const container = scrollContainerRef.current;
-      // Index 24 is the current hour cell.
-      // We generally want to center index 24, but offset by the sticky header width approx (256px)
-      const gridCenter = (24 * CELL_WIDTH) + (CELL_WIDTH / 2);
-      const centerPos = gridCenter - (container.clientWidth / 2) + 256; 
-      
-      container.scrollLeft = centerPos;
-    }
+  // Base reference time: Start of today (00:00 local user time)
+  const startOfDay = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
   }, []);
 
-  // Mouse Drag Logic
+  // 0..23 array for the grid
+  const hours = useMemo(() => Array.from({ length: 24 }, (_, i) => i), []);
+
+  // User's local timezone for reference date calculation
+  const userTimezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
+
+  // Handle Dragging / Clicking
+  const updateCursor = (clientX: number) => {
+    if (!gridAreaRef.current) return;
+    const rect = gridAreaRef.current.getBoundingClientRect();
+    const x = clientX - rect.left;
+    // Clamp between 0 and 1
+    const newPos = Math.max(0, Math.min(1, x / rect.width));
+    setCursorPosition(newPos);
+  };
+
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (!scrollContainerRef.current) return;
     setIsDragging(true);
-    setStartX(e.pageX - scrollContainerRef.current.offsetLeft);
-    setScrollLeftState(scrollContainerRef.current.scrollLeft);
-    document.body.style.cursor = 'grabbing';
+    updateCursor(e.clientX);
+    document.body.style.cursor = 'col-resize';
   };
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
-    document.body.style.cursor = 'default';
-  };
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging) {
+        e.preventDefault();
+        updateCursor(e.clientX);
+      }
+    };
 
-  const handleMouseLeave = () => {
-    if (isDragging) {
+    const handleMouseUp = () => {
       setIsDragging(false);
       document.body.style.cursor = 'default';
-    }
-  };
+    };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !scrollContainerRef.current) return;
-    e.preventDefault();
-    const x = e.pageX - scrollContainerRef.current.offsetLeft;
-    const walk = (x - startX) * 1.5; 
-    
-    // Inverted Logic: Drag Left -> ScrollLeft Increases (pushed right)
-    // Matches "move slider into red area"
-    scrollContainerRef.current.scrollLeft = scrollLeftState + walk;
-  };
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
+
 
   // Formatters
-  const formatTime = (date: Date, timezone: string) => {
+  const formatCellTime = (hourOffset: number, timezone: string) => {
     try {
+      const d = new Date(startOfDay.getTime() + hourOffset * 3600 * 1000);
       return new Intl.DateTimeFormat('en-GB', {
         hour: '2-digit',
         minute: '2-digit',
         timeZone: timezone,
         hour12: false
-      }).format(date);
+      }).format(d);
     } catch (e) {
       return "--:--";
     }
   };
-  
+
   const formatLiveTime = (date: Date, timezone: string) => {
     try {
       return new Intl.DateTimeFormat('en-GB', {
@@ -122,64 +120,94 @@ export const Timeline: React.FC<TimelineProps> = ({ cities, onRemoveCity }) => {
     }
   };
 
-  const getDayPhase = (date: Date, timezone: string) => {
+  // Helper to get a date string key for comparison (e.g. "2023-10-25")
+  const getDateKey = (hourOffset: number, timezone: string) => {
     try {
-        const hour = parseInt(new Intl.DateTimeFormat('en-US', {
-            hour: 'numeric',
-            hour12: false,
+        const d = new Date(startOfDay.getTime() + hourOffset * 3600 * 1000);
+        return new Intl.DateTimeFormat('en-CA', {
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
             timeZone: timezone
-        }).format(date));
-        // Night is 21:00 (9PM) to 09:00 (9AM)
-        if (hour >= 21 || hour < 9) return 'night';
-        return 'day';
+        }).format(d);
     } catch (e) {
-        return 'day';
+        return "error";
     }
-  }
+  };
+
+  // The User's "Today" date key. 
+  // We use this to check if a city's time falls on the same day as the user or a different one.
+  const userDateKey = getDateKey(0, userTimezone);
 
   return (
     <div className="flex flex-col h-full bg-white relative select-none">
       
-      {/* The Red Frame Overlay (Centered in Viewport) */}
-      <div 
-        className="absolute left-1/2 top-0 bottom-0 z-30 pointer-events-none transform -translate-x-1/2"
-        style={{ width: `${CELL_WIDTH}px` }}
-      >
-        <div className="h-full w-full border-x-4 border-t-4 border-b-4 border-red-600 shadow-[0_0_20px_rgba(220,38,38,0.3)] bg-red-500/5"></div>
-        <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-red-600 text-white px-3 py-1 font-bold text-sm whitespace-nowrap shadow-lg">
-          SELECTED TIME
-        </div>
+      {/* Header Row (Grid Numbers 00:00 - 23:00) */}
+      <div className="flex h-12 border-b-2 border-gray-200">
+         {/* Spacer for City Column */}
+         <div className="w-48 md:w-64 flex-shrink-0 bg-white border-r-4 border-black z-20 flex items-center px-4">
+             <span className="font-bold text-gray-400 font-mono text-xs tracking-wider">CITIES / LOCAL</span>
+         </div>
+         {/* Numbers */}
+         <div className="flex-1 flex items-end pb-2 px-0 relative">
+            {hours.map(h => (
+                <div key={h} className="flex-1 text-center font-mono text-[10px] sm:text-xs text-gray-400 border-l border-gray-100 last:border-r truncate">
+                    {h.toString().padStart(2, '0')}:00
+                </div>
+            ))}
+         </div>
       </div>
 
-      {/* Main Scroll Area */}
-      <div 
-        ref={scrollContainerRef}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
-        onMouseMove={handleMouseMove}
-        className="flex-1 overflow-x-auto overflow-y-hidden cursor-grab active:cursor-grabbing hide-scrollbar relative"
-        style={{ scrollBehavior: isDragging ? 'auto' : 'smooth' }}
-      >
-        <div className="flex flex-col min-w-max pb-8 pt-12 relative">
-           
-           {/* Header Row */}
-           <div className="flex sticky left-0 z-20">
-             <div className="sticky left-0 w-48 md:w-64 bg-white border-b-4 border-r-4 border-black z-40 flex items-center p-4">
-                <span className="font-bold text-gray-400 font-mono text-sm tracking-wider">CITIES / LOCAL TIME</span>
-             </div>
-           </div>
+      {/* Main Content Area */}
+      <div className="flex-1 relative overflow-y-auto overflow-x-hidden">
+        
+        {/* 
+           Red Frame Overlay 
+        */}
+        <div 
+            className="absolute top-0 bottom-0 left-0 right-0 z-30 pointer-events-none flex"
+        >
+            {/* 1. Spacer for the sticky column (left side) */}
+            <div className="w-48 md:w-64 flex-shrink-0"></div>
 
-           {cities.length === 0 && (
-             <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20 z-0">
-                <h1 className="text-6xl font-black uppercase text-center">Add a city<br/>to start</h1>
-             </div>
-           )}
+            {/* 2. Grid Area (right side) */}
+            <div className="flex-1 relative h-full overflow-hidden" ref={gridAreaRef}>
+                 {/* The Draggable Red Frame */}
+                 <div 
+                    className="absolute top-0 bottom-0 border-x-2 border-red-600 bg-red-500/10 box-border"
+                    style={{ 
+                        left: `${cursorPosition * 100}%`,
+                        width: `${100/24}%`, // Exactly one hour wide
+                        transform: `translateX(-50%)` 
+                    }}
+                 >
+                    {/* Handle/Indicator at top */}
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full">
+                        <div className="bg-red-600 text-white text-[10px] font-bold px-1 py-0.5 rounded-t">
+                             {/* Show selected time in the handle */}
+                             {(() => {
+                                 const totalMinutes = cursorPosition * 24 * 60;
+                                 const h = Math.floor(totalMinutes / 60) % 24;
+                                 const m = Math.floor(totalMinutes % 60);
+                                 return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                             })()}
+                        </div>
+                    </div>
+                 </div>
+            </div>
+        </div>
 
-           {cities.map((city) => (
-             <div key={city.id} className="flex flex-row hover:bg-gray-50 transition-colors h-32 border-b-2 border-gray-100 relative group">
+
+        {/* Interaction Layer (The Rows) */}
+        <div 
+          className="relative min-h-full"
+          onMouseDown={handleMouseDown}
+        >
+            {cities.map((city) => {
+             return (
+             <div key={city.id} className="flex flex-row h-24 border-b border-gray-100 relative group">
                
-               {/* Sticky City Name Column with LIVE CLOCK */}
+               {/* Sticky City Name Column - Shows LIVE TIME */}
                <div className="sticky left-0 w-48 md:w-64 bg-white border-r-4 border-black z-20 flex-shrink-0 flex items-center justify-between p-4 shadow-[4px_0_0_rgba(0,0,0,0.1)]">
                  <div className="overflow-hidden w-full">
                    <div className="flex justify-between items-start">
@@ -188,7 +216,10 @@ export const Timeline: React.FC<TimelineProps> = ({ cities, onRemoveCity }) => {
                         <span className="text-xs text-gray-500 font-mono truncate">{city.country}</span>
                       </div>
                       <button 
-                        onClick={() => onRemoveCity(city.id)}
+                        onClick={(e) => {
+                            e.stopPropagation(); 
+                            onRemoveCity(city.id)
+                        }}
                         className="text-gray-300 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100"
                         title="Remove city"
                       >
@@ -196,50 +227,54 @@ export const Timeline: React.FC<TimelineProps> = ({ cities, onRemoveCity }) => {
                       </button>
                    </div>
                    
-                   {/* Live Digital Clock for this City */}
-                   <div className="mt-3 font-mono">
-                     <div className="text-3xl font-black tracking-tight text-gray-900">
+                   {/* Live Clock */}
+                   <div className="mt-2 font-mono text-black">
+                     <div className="text-2xl font-black tracking-tight">
                        {formatLiveTime(now, city.timezone)}
                      </div>
-                     <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">
+                     <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
                         {formatDate(now, city.timezone)}
                      </div>
                    </div>
                  </div>
                </div>
 
-               {/* Time Strip */}
-               <div className="flex items-center h-full">
-                 {hours.map((date, index) => {
-                   const timeStr = formatTime(date, city.timezone);
-                   const dateStr = formatDate(date, city.timezone);
-                   const phase = getDayPhase(date, city.timezone);
-                   const isMidnight = timeStr === "00:00";
+               {/* Time Strip Grid - Static 0-24 */}
+               <div className="flex-1 flex h-full relative cursor-col-resize">
+                 {/* The 24 Grid Cells */}
+                 {hours.map((h) => {
+                   const localHour = formatCellTime(h, city.timezone);
+                   const cellDateKey = getDateKey(h, city.timezone);
+                   
+                   // Compare cell date to USER'S current date
+                   const isDifferentDay = cellDateKey !== userDateKey;
                    
                    return (
                      <div 
-                       key={index} 
+                       key={h} 
                        className={`
-                         flex-shrink-0 flex flex-col items-center justify-center h-full border-r border-gray-200
-                         ${phase === 'night' ? 'bg-slate-50 text-slate-400' : 'bg-white text-black'}
-                         ${isMidnight ? 'border-r-4 border-black' : ''}
+                         flex-1 flex flex-col items-center justify-center border-r border-gray-100 last:border-r-0
+                         ${isDifferentDay ? 'bg-slate-50' : 'bg-white'}
+                         text-gray-600
                        `}
-                       style={{ width: `${CELL_WIDTH}px` }}
                      >
-                       <span className={`font-mono text-xl md:text-2xl font-bold ${isMidnight ? 'text-black underline decoration-4 decoration-red-500' : ''}`}>
-                         {timeStr}
+                       <span className="font-mono text-xs sm:text-sm font-bold">
+                         {localHour}
                        </span>
-                       {isMidnight && (
-                         <span className="text-[10px] font-bold uppercase tracking-wider mt-1 text-red-600">
-                           {dateStr}
-                         </span>
-                       )}
                      </div>
                    );
                  })}
                </div>
              </div>
-           ))}
+           );
+           })}
+
+           {cities.length === 0 && (
+             <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20 z-0 pl-64">
+                <h1 className="text-6xl font-black uppercase text-center">Add a city<br/>to start</h1>
+             </div>
+           )}
+
         </div>
       </div>
     </div>
