@@ -1,11 +1,20 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { SearchResult } from "../types";
 
-const apiKey = process.env.API_KEY || '';
-const ai = new GoogleGenAI({ apiKey });
+const apiKey = process.env.API_KEY;
+
+// Only initialize if key is present to prevent startup errors
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 export const searchCityTimezone = async (query: string): Promise<SearchResult | null> => {
   if (!query) return null;
+
+  // If no API key is provided, return null gracefully.
+  // The UI will handle this by showing the default city list or an error.
+  if (!ai) {
+    console.warn("Gemini API key is missing. Search functionality is disabled.");
+    return null;
+  }
 
   try {
     const prompt = `Identify the city and its timezone from this query: "${query}". Return the correct IANA timezone ID.`;
