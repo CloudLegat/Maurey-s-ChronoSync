@@ -4,9 +4,3 @@ export interface City {
   timezone: string;
   country?: string;
 }
-
-export interface SearchResult {
-  name: string;
-  timezone: string;
-  country: string;
-}
