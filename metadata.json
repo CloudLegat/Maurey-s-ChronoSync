@@ -1,0 +1,5 @@
+{
+  "name": "ChronoSync",
+  "description": "A minimalist, tactile timezone tracker. Visualize time across multiple cities with a calendar-inspired timeline interface.",
+  "requestFramePermissions": []
+}
