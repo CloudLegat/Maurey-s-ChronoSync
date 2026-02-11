@@ -57,6 +57,9 @@ export const CITIES_DATABASE: CityData[] = [
   { name: 'Nur-Sultan', country: 'Kazakhstan', timezone: 'Asia/Almaty' },
   { name: 'Tashkent', country: 'Uzbekistan', timezone: 'Asia/Tashkent' },
   { name: 'Chisinau', country: 'Moldova', timezone: 'Europe/Chisinau' },
+  { name: 'Tallinn', country: 'Estonia', timezone: 'Europe/Tallinn' },
+  { name: 'Riga', country: 'Latvia', timezone: 'Europe/Riga' },
+  { name: 'Vilnius', country: 'Lithuania', timezone: 'Europe/Vilnius' },
 
   // Western Europe - major tech hubs
   { name: 'London', country: 'United Kingdom', timezone: 'Europe/London' },
@@ -101,10 +104,11 @@ export const CITIES_DATABASE: CityData[] = [
   { name: 'Belgrade', country: 'Serbia', timezone: 'Europe/Belgrade' },
   { name: 'Novi Sad', country: 'Serbia', timezone: 'Europe/Belgrade' },
   { name: 'Zagreb', country: 'Croatia', timezone: 'Europe/Zagreb' },
+  { name: 'Podgorica', country: 'Montenegro', timezone: 'Europe/Podgorica' },
   { name: 'Athens', country: 'Greece', timezone: 'Europe/Athens' },
   { name: 'Istanbul', country: 'Turkey', timezone: 'Europe/Istanbul' },
   { name: 'Ankara', country: 'Turkey', timezone: 'Europe/Istanbul' },
-
+  { name: 'Limassol', country: 'Cyprus', timezone: 'Asia/Nicosia' },
   // Asia - major tech hubs
   { name: 'Tokyo', country: 'Japan', timezone: 'Asia/Tokyo' },
   { name: 'Osaka', country: 'Japan', timezone: 'Asia/Tokyo' },
